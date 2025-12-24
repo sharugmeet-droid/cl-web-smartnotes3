@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartNote AI</title>
+    <style>
+        /* --- VIBE CODING: STYLING & LAYOUT --- */
+        :root {
+            --bg: #f4f7f6; --card: #ffffff; --text: #333; --primary: #6366f1;
+        }
+        [data-theme="dark"] {
+            --bg: #1a1a1a; --card: #2d2d2d; --text: #f0f0f0; --primary: #818cf8;
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); transition: 0.3s; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        
+        input, textarea, select { 
+            padding: 12px; border-radius: 8px; border: 1px solid #ddd; 
+            background: var(--card); color: var(--text); width: 100%; box-sizing: border-box;
+        }
+        button { 
+            padding: 10px 20px; border-radius: 8px; border: none; 
+            background: var(--primary); color: white; cursor: pointer; font-weight: bold;
+        }
+        
+        .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .note-card { 
+            background: var(--card); padding: 20px; border-radius: 12px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); position: relative;
+            transition: transform 0.2s;
+        }
+        .note-card:hover { transform: translateY(-5px); }
+        .pinned { border: 2px solid var(--primary); }
+        .pin-btn { position: absolute; top: 10px; right: 10px; background: none; color: var(--primary); font-size: 1.2rem; }
+        
+        .tag { font-size: 0.75rem; background: #e0e7ff; color: #4338ca; padding: 2px 8px; border-radius: 4px; margin-right: 5px; }
+        .mood { font-style: italic; font-size: 0.8rem; color: #888; }
+        mark { background: yellow; color: black; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>SmartNote AI</h1>
+        <button onclick="toggleTheme()">🌓 Toggle Mode</button>
+    </header>
+
+    <div class="controls">
+        <input type="text" id="searchBar" placeholder="Search notes (case-insensitive)..." oninput="renderNotes()">
+        <select id="sortSelect" onchange="renderNotes()" style="width: auto;">
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+        </select>
+        <button onclick="downloadJSON()">💾 Export JSON</button>
+    </div>
+
+    <div class="note-input" style="background: var(--card); padding: 20px; border-radius: 12px; margin-bottom: 30px;">
+        <input type="text" id="noteTitle" placeholder="Title..." style="margin-bottom: 10px;">
+        <textarea id="noteContent" rows="3" placeholder="Write your thoughts (Markdown supported)..."></textarea>
+        <button onclick="addNote()" style="margin-top: 10px; width: 100%;">Add Smart Note</button>
+    </div>
+
+    <div id="notesGrid" class="notes-grid"></div>
+</div>
+
+<script>
+    /* --- MANUAL CODE: APP LOGIC --- */
+    let notes = JSON.parse(localStorage.getItem('smart_notes')) || [];
+
+    function save() {
+        localStorage.setItem('smart_notes', JSON.stringify(notes));
+        renderNotes();
+    }
+
+    // MANUAL FEATURE: Smart Metadata Mockup
+    function generateSmartMetadata(content) {
+        const words = content.toLowerCase().split(/\W+/);
+        const tags = words.filter(w => w.length > 5).slice(0, 2); // Simple tag extraction
+        const moods = ["😊 Happy", "💡 Insightful", "📝 Productive", "🤔 Thoughtful"];
+        return {
+            summary: content.substring(0, 40) + "...",
+            tags: tags.length ? tags : ["general"],
+            mood: moods[Math.floor(Math.random() * moods.length)]
+        };
+    }
+
+    function addNote() {
+        const title = document.getElementById('noteTitle').value;
+        const content = document.getElementById('noteContent').value;
+        if (!title || !content) return alert("Please fill in both fields");
+
+        const smartData = generateSmartMetadata(content);
+
+        const newNote = {
+            id: Date.now(),
+            title,
+            content,
+            pinned: false,
+            date: new Date(),
+            ...smartData
+        };
+
+        notes.push(newNote);
+        document.getElementById('noteTitle').value = '';
+        document.getElementById('noteContent').value = '';
+        save();
+    }
+
+    function togglePin(id) {
+        const note = notes.find(n => n.id === id);
+        note.pinned = !note.pinned;
+        save();
+    }
+
+    function deleteNote(id) {
+        notes = notes.filter(n => n.id !== id);
+        save();
+    }
+
+    // MANUAL FEATURE: Highlight Search Result
+    function highlightText(text, query) {
+        if (!query) return text;
+        const re = new RegExp(`(${query})`, 'gi');
+        return text.replace(re, `<mark>$1</mark>`);
+    }
+
+    // MANUAL FEATURE: Sorting & Filtering
+    function renderNotes() {
+        const grid = document.getElementById('notesGrid');
+        const query = document.getElementById('searchBar').value.toLowerCase();
+        const sortBy = document.getElementById('sortSelect').value;
+
+        grid.innerHTML = '';
+
+        let filteredNotes = notes.filter(n => 
+            n.title.toLowerCase().includes(query) || 
+            n.content.toLowerCase().includes(query)
+        );
+
+        // Sorting Logic
+        filteredNotes.sort((a, b) => {
+            if (a.pinned !== b.pinned) return a.pinned ? -1 : 1; // Pinned always top
+            return sortBy === 'newest' ? b.id - a.id : a.id - b.id;
+        });
+
+        filteredNotes.forEach(note => {
+            const card = document.createElement('div');
+            card.className = `note-card ${note.pinned ? 'pinned' : ''}`;
+            
+            card.innerHTML = `
+                <button class="pin-btn" onclick="togglePin(${note.id})">${note.pinned ? '📌' : '📍'}</button>
+                <h3>${highlightText(note.title, query)}</h3>
+                <p>${highlightText(note.content, query)}</p>
+                <div style="margin-bottom: 10px;">
+                    ${note.tags.map(t => `<span class="tag">#${t}</span>`).join('')}
+                </div>
+                <div class="mood">AI Mood: ${note.mood}</div>
+                <hr>
+                <button onclick="deleteNote(${note.id})" style="background:#ff4d4d; font-size: 0.8rem;">Delete</button>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    // EXTRA FEATURE: Export as JSON
+    function downloadJSON() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(notes));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "my_notes.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
+    function toggleTheme() {
+        const theme = document.body.getAttribute('data-theme');
+        document.body.setAttribute('data-theme', theme === 'dark' ? 'light' : 'dark');
+    }
+
+    renderNotes();
+</script>
+</body>
+</html>
